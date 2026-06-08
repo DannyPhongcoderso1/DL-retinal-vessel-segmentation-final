@@ -16,10 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models import (  # noqa: E402
-    AttentionUNet,
     DeepLabV3PlusResNet50Binary,
     SegFormerB0,
-    UNet,
 )
 from src.utils.metrics import (  # noqa: E402
     accuracy_score,
@@ -46,8 +44,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         choices=(
-            "unet",
-            "attention_unet",
             "segformer_b0",
             "deeplabv3plus_resnet50",
             "all",
@@ -131,15 +127,7 @@ def resolve_device(device_arg: str) -> torch.device:
 
 def build_model(model_name: str) -> nn.Module:
     """Instantiate the selected model and validate that it is runnable."""
-    if model_name == "unet":
-        # UNet evaluation requires a trained checkpoint, which is not currently
-        # included in the repository.
-        model = UNet()
-    elif model_name == "attention_unet":
-        # AttentionUNet evaluation requires a trained checkpoint, which is not
-        # currently included in the repository.
-        model = AttentionUNet()
-    elif model_name == "segformer_b0":
+    if model_name == "segformer_b0":
         model = SegFormerB0(pretrained=False)
     elif model_name == "deeplabv3plus_resnet50":
         model = DeepLabV3PlusResNet50Binary(pretrained_backbone=False)
@@ -497,10 +485,6 @@ def tune_threshold(
 
 def format_model_name(model_name: str) -> str:
     """Return a readable display name for a model argument."""
-    if model_name == "unet":
-        return "UNet"
-    if model_name == "attention_unet":
-        return "AttentionUNet"
     if model_name == "segformer_b0":
         return "SegFormer-B0"
     if model_name == "deeplabv3plus_resnet50":
