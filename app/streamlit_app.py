@@ -624,6 +624,15 @@ def display_metric(label: str, value: Any, suffix: str = "") -> None:
         st.metric(label, f"{value}{suffix}")
 
 
+def format_card_value(value: Any, suffix: str = "") -> str:
+    """Format card values without changing the underlying metric."""
+    if value is None:
+        return "N/A"
+    if isinstance(value, float):
+        return f"{value:.2f}{suffix}"
+    return f"{value}{suffix}"
+
+
 def density_interpretation(vessel_density: float) -> str:
     """Return a simple non-medical interpretation for vessel density."""
     if vessel_density < 0.045:
@@ -633,22 +642,65 @@ def density_interpretation(vessel_density: float) -> str:
     return "Moderate vessel density"
 
 
-def render_sidebar(model_name: str, threshold: float) -> bool:
-    """Render sidebar model information and controls."""
+def density_label(vessel_density: float) -> str:
+    """Return a compact density label for dashboard cards."""
+    if vessel_density < 0.045:
+        return "Low"
+    if vessel_density > 0.18:
+        return "High"
+    return "Moderate"
+
+
+def risk_status(risk_score: Optional[int]) -> Tuple[str, str]:
+    """Map the existing risk-score rules to a compact visual status."""
+    if risk_score is None:
+        return "N/A", "Risk score unavailable"
+    if risk_score < 30:
+        return "🟢 Low Risk", "Low screening risk"
+    if risk_score < 60:
+        return "🟡 Moderate Risk", "Moderate screening risk"
+    return "🔴 High Risk", "High screening risk"
+
+
+def render_metric_card(title: str, value: str, description: str) -> None:
+    """Render a compact metric card for the dashboard grid."""
+    with st.container(border=True):
+        st.caption(title)
+        st.metric(title, value, label_visibility="collapsed")
+        st.caption(description)
+
+
+def render_model_summary_card(model_name: str) -> None:
+    """Render compact model status information on the main dashboard."""
     checkpoint = MODEL_CONFIGS[model_name]["checkpoint"]
+    checkpoint_status = "Checkpoint Loaded" if checkpoint.exists() else "Checkpoint Missing"
+    device_name = resolve_device().type.upper()
 
-    st.sidebar.header("Model information")
-    st.sidebar.write(f"Model: {model_name}")
-    st.sidebar.write(f"Checkpoint: `{checkpoint.relative_to(PROJECT_ROOT)}`")
-    st.sidebar.write(f"Device: {resolve_device().type.upper()}")
+    with st.container(border=True):
+        header_col, status_col = st.columns([3, 1])
+        with header_col:
+            st.subheader("Model Summary")
+            st.caption("Current configuration for this segmentation run.")
+        with status_col:
+            if checkpoint.exists():
+                st.success("Ready")
+            else:
+                st.error("Missing checkpoint")
 
-    if checkpoint.exists():
-        st.sidebar.success("Checkpoint found")
-    else:
-        st.sidebar.error("Checkpoint missing")
+        model_col, checkpoint_col, device_col, status_col = st.columns(4)
+        with model_col:
+            st.metric("Model", model_name)
+        with checkpoint_col:
+            st.metric("Checkpoint", checkpoint.name)
+            st.caption(f"`{checkpoint.relative_to(PROJECT_ROOT)}`")
+        with device_col:
+            st.metric("Device", device_name)
+        with status_col:
+            st.metric("Status", checkpoint_status)
 
-    st.sidebar.divider()
-    st.sidebar.write(f"Threshold: {threshold:.2f}")
+
+def render_sidebar() -> bool:
+    """Render sidebar controls."""
     return st.sidebar.button("Run Model", type="primary", width="stretch")
 
 
@@ -681,7 +733,10 @@ def main() -> None:
         step=0.01,
         key="prediction_threshold",
     )
-    run_model = render_sidebar(model_name, threshold)
+    run_model = render_sidebar()
+
+    render_model_summary_card(model_name)
+    st.divider()
 
     uploaded_file = st.file_uploader(
         "Upload retinal fundus image",
@@ -693,10 +748,10 @@ def main() -> None:
         return
 
     original_image = Image.open(uploaded_file).convert("RGB")
-    st.subheader("Uploaded image")
-    st.image(original_image, caption="Original image", width="stretch")
 
     if not run_model:
+        with st.container(border=True):
+            st.image(original_image, caption="Original Image", width="stretch")
         return
 
     checkpoint = MODEL_CONFIGS[model_name]["checkpoint"]
@@ -729,84 +784,124 @@ def main() -> None:
     skeleton = analysis.get("skeleton")
     skeleton_image = mask_to_image(skeleton) if skeleton is not None else None
 
-    st.subheader("Segmentation results")
-    result_columns = st.columns(6)
+    st.subheader("Segmentation Results")
+    result_columns = st.columns(4)
     with result_columns[0]:
-        st.image(original_image, caption="Original image", width="stretch")
+        st.image(original_image, caption="Original Image", width="stretch")
     with result_columns[1]:
-        st.image(model_input_image, caption="Model input crop", width="stretch")
+        st.image(mask_image, caption="Prediction Mask", width="stretch")
     with result_columns[2]:
-        st.image(probability_image, caption="Probability map", width="stretch")
-    with result_columns[3]:
-        st.image(mask_image, caption="Predicted vessel mask", width="stretch")
-    with result_columns[4]:
         st.image(overlay_image, caption="Overlay", width="stretch")
-    with result_columns[5]:
+    with result_columns[3]:
         if skeleton_image is not None:
-            st.image(skeleton_image, caption="Skeletonized vessel map", width="stretch")
+            st.image(skeleton_image, caption="Skeleton Map", width="stretch")
         else:
             st.info("Skeleton map unavailable.")
 
-    st.subheader("Vessel analysis")
-    metric_cols = st.columns(6)
-    with metric_cols[0]:
-        display_metric("Vessel Density", analysis.get("vessel_density_percent"), "%")
-    with metric_cols[1]:
-        display_metric("Branch Count", analysis.get("branch_count"))
-    with metric_cols[2]:
-        display_metric("Junction Count", analysis.get("junction_count"))
-    with metric_cols[3]:
-        display_metric("Endpoint Count", analysis.get("endpoint_count"))
-    with metric_cols[4]:
-        display_metric("Connected Components", analysis.get("connected_components"))
-    with metric_cols[5]:
-        display_metric("Risk Score", analysis.get("risk_score"))
+    st.divider()
+    st.subheader("Vessel Analysis Metrics")
+    risk_label, risk_description = risk_status(analysis.get("risk_score"))
+    vessel_density = float(analysis["vessel_density"])
 
-    st.write(density_interpretation(float(analysis["vessel_density"])))
-    st.caption(
-        f"{analysis['vessel_pixels']:,} vessel pixels / "
-        f"{analysis['total_pixels']:,} total pixels"
-    )
-
-    st.subheader("Inference debug")
-    debug_cols = st.columns(8)
-    with debug_cols[0]:
-        st.metric("Raw Output Min", f"{debug_stats['raw_output_min']:.6f}")
-    with debug_cols[1]:
-        st.metric("Raw Output Max", f"{debug_stats['raw_output_max']:.6f}")
-    with debug_cols[2]:
-        st.metric("Probability Min", f"{debug_stats['probability_min']:.6f}")
-    with debug_cols[3]:
-        st.metric("Probability Max", f"{debug_stats['probability_max']:.6f}")
-    with debug_cols[4]:
-        st.metric("Threshold", f"{debug_stats['selected_threshold']:.6f}")
-    with debug_cols[5]:
-        st.metric("Raw Vessel Pixels", f"{debug_stats['raw_vessel_pixels']:,}")
-    with debug_cols[6]:
-        st.metric("Vessel Pixels", f"{debug_stats['vessel_pixels']:,}")
-    with debug_cols[7]:
-        st.metric("Total Pixels", f"{debug_stats['total_pixels']:,}")
-    st.caption(
-        f"Raw output shape: {debug_stats['raw_output_shape']} | "
-        f"Preprocessing: {debug_stats['preprocessing']} | "
-        f"Postprocessing: {debug_stats['postprocessing']} | "
-        f"Auto crop: {debug_stats['was_cropped']} | "
-        f"Model input size: {debug_stats['input_size']} | "
-        f"Crop box: {debug_stats['crop_box']}"
-    )
-    if debug_stats["vessel_pixels"] == 0:
-        suggested_threshold = max(debug_stats["probability_max"] * 0.75, 0.000001)
-        st.warning(
-            "No vessel pixels passed the selected threshold. Check probability max "
-            "above to decide whether the threshold is too high or the model output "
-            "contains little vessel signal. "
-            f"For inspection only, try a threshold near {suggested_threshold:.6f}."
+    metric_row_one = st.columns(3)
+    with metric_row_one[0]:
+        render_metric_card(
+            "Vessel Density",
+            format_card_value(analysis.get("vessel_density_percent"), "%"),
+            density_label(vessel_density),
+        )
+    with metric_row_one[1]:
+        render_metric_card(
+            "Branch Count",
+            format_card_value(analysis.get("branch_count")),
+            "Skeleton branch segments",
+        )
+    with metric_row_one[2]:
+        render_metric_card(
+            "Junction Count",
+            format_card_value(analysis.get("junction_count")),
+            "Branching junction points",
         )
 
+    metric_row_two = st.columns(3)
+    with metric_row_two[0]:
+        render_metric_card(
+            "Endpoint Count",
+            format_card_value(analysis.get("endpoint_count")),
+            "Terminal skeleton points",
+        )
+    with metric_row_two[1]:
+        render_metric_card(
+            "Connected Components",
+            format_card_value(analysis.get("connected_components")),
+            "Separated vessel regions",
+        )
+    with metric_row_two[2]:
+        render_metric_card(
+            "Risk Score",
+            format_card_value(analysis.get("risk_score")),
+            risk_label,
+        )
+
+    st.caption(
+        f"{density_interpretation(vessel_density)} | "
+        f"{analysis['vessel_pixels']:,} vessel pixels / "
+        f"{analysis['total_pixels']:,} total pixels | "
+        f"Status: {risk_label} ({risk_description})"
+    )
+
+    st.divider()
+    st.subheader("Advanced Debug Information")
+    with st.expander("Show Advanced Debug Visualizations", expanded=False):
+        debug_cols = st.columns(4)
+        with debug_cols[0]:
+            st.metric("Raw Output Min", f"{debug_stats['raw_output_min']:.6f}")
+        with debug_cols[1]:
+            st.metric("Raw Output Max", f"{debug_stats['raw_output_max']:.6f}")
+        with debug_cols[2]:
+            st.metric("Probability Min", f"{debug_stats['probability_min']:.6f}")
+        with debug_cols[3]:
+            st.metric("Probability Max", f"{debug_stats['probability_max']:.6f}")
+
+        debug_cols_two = st.columns(4)
+        with debug_cols_two[0]:
+            st.metric("Threshold", f"{debug_stats['selected_threshold']:.6f}")
+        with debug_cols_two[1]:
+            st.metric("Vessel Pixels", f"{debug_stats['vessel_pixels']:,}")
+        with debug_cols_two[2]:
+            st.metric("Total Pixels", f"{debug_stats['total_pixels']:,}")
+        with debug_cols_two[3]:
+            st.metric("Raw Vessel Pixels", f"{debug_stats['raw_vessel_pixels']:,}")
+
+        debug_image_cols = st.columns(2)
+        with debug_image_cols[0]:
+            st.image(model_input_image, caption="Model Input Crop", width="stretch")
+        with debug_image_cols[1]:
+            st.image(probability_image, caption="Probability Map", width="stretch")
+
+        st.caption(
+            f"Raw output shape: {debug_stats['raw_output_shape']} | "
+            f"Preprocessing: {debug_stats['preprocessing']} | "
+            f"Postprocessing: {debug_stats['postprocessing']} | "
+            f"Auto crop: {debug_stats['was_cropped']} | "
+            f"Model input size: {debug_stats['input_size']} | "
+            f"Crop box: {debug_stats['crop_box']}"
+        )
+        if debug_stats["vessel_pixels"] == 0:
+            suggested_threshold = max(debug_stats["probability_max"] * 0.75, 0.000001)
+            st.warning(
+                "No vessel pixels passed the selected threshold. Check probability max "
+                "above to decide whether the threshold is too high or the model output "
+                "contains little vessel signal. "
+                f"For inspection only, try a threshold near {suggested_threshold:.6f}."
+            )
+
+    st.divider()
+    st.subheader("Export Results")
     download_mask_col, download_overlay_col = st.columns(2)
     with download_mask_col:
         st.download_button(
-            "Download prediction mask PNG",
+            "Download Prediction Mask",
             data=image_bytes(mask_image),
             file_name="predicted_vessel_mask.png",
             mime="image/png",
@@ -814,7 +909,7 @@ def main() -> None:
         )
     with download_overlay_col:
         st.download_button(
-            "Download overlay PNG",
+            "Download Overlay Image",
             data=image_bytes(overlay_image),
             file_name="retinal_vessel_overlay.png",
             mime="image/png",
