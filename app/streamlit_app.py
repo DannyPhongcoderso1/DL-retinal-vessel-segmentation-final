@@ -537,10 +537,17 @@ def analyze_binary_mask(binary_mask: np.ndarray) -> Dict[str, Any]:
         "vessel_density": vessel_density,
         "vessel_density_percent": vessel_density * 100.0,
         "skeleton": None,
+        "endpoint_map": None,
+        "junction_map": None,
+        "branch_map": None,
+        "skeleton_length": None,
         "branch_count": None,
         "junction_count": None,
         "endpoint_count": None,
         "connected_components": None,
+        "branch_density": None,
+        "endpoint_ratio": None,
+        "fragmentation_index": None,
         "risk_score": None,
     }
 
@@ -577,14 +584,25 @@ def analyze_binary_mask(binary_mask: np.ndarray) -> Dict[str, Any]:
         junction_count = len(junction_sizes)
         endpoint_count = int(endpoint_pixels.sum())
         connected_components = len(vessel_component_sizes)
+        skeleton_length = int(skeleton.sum())
+        branch_density = junction_count / skeleton_length if skeleton_length else 0.0
+        endpoint_ratio = endpoint_count / skeleton_length if skeleton_length else 0.0
+        fragmentation_index = connected_components / skeleton_length if skeleton_length else 0.0
 
         analysis.update(
             {
                 "skeleton": skeleton.astype(np.uint8),
+                "endpoint_map": endpoint_pixels.astype(np.uint8),
+                "junction_map": junction_pixels.astype(np.uint8),
+                "branch_map": branch_pixels.astype(np.uint8),
+                "skeleton_length": skeleton_length,
                 "branch_count": branch_count,
                 "junction_count": junction_count,
                 "endpoint_count": endpoint_count,
                 "connected_components": connected_components,
+                "branch_density": branch_density,
+                "endpoint_ratio": endpoint_ratio,
+                "fragmentation_index": fragmentation_index,
             }
         )
 
@@ -615,12 +633,64 @@ def mask_to_image(binary_mask: np.ndarray) -> Image.Image:
     return Image.fromarray((binary_mask * 255).astype(np.uint8), mode="L")
 
 
+def make_colored_morphology_map(
+    mask: np.ndarray,
+    skeleton: Optional[np.ndarray],
+    endpoint_map: Optional[np.ndarray],
+    junction_map: Optional[np.ndarray],
+) -> Optional[Image.Image]:
+    """Render vessel morphology features as a color-coded image."""
+    if skeleton is None:
+        return None
+
+    mask_bool = mask.astype(bool)
+    skeleton_bool = skeleton.astype(bool)
+    endpoint_bool = endpoint_map.astype(bool) if endpoint_map is not None else np.zeros_like(mask_bool)
+    junction_bool = junction_map.astype(bool) if junction_map is not None else np.zeros_like(mask_bool)
+
+    color_map = np.zeros((*mask_bool.shape, 3), dtype=np.uint8)
+    color_map[mask_bool] = np.array([25, 45, 95], dtype=np.uint8)
+    color_map[skeleton_bool] = np.array([255, 255, 255], dtype=np.uint8)
+
+    # Enlarge sparse feature points so endpoints and junctions remain visible
+    # after Streamlit resizes the image.
+    endpoint_display = dilate_feature_points(endpoint_bool, radius=2)
+    junction_display = dilate_feature_points(junction_bool, radius=3)
+    color_map[endpoint_display] = np.array([40, 255, 90], dtype=np.uint8)
+    color_map[junction_display] = np.array([255, 70, 35], dtype=np.uint8)
+
+    return Image.fromarray(color_map, mode="RGB")
+
+
+def dilate_feature_points(points: np.ndarray, radius: int) -> np.ndarray:
+    """Make sparse binary feature points easier to see on dashboard images."""
+    if radius <= 0 or not np.any(points):
+        return points.astype(bool)
+
+    padded = np.pad(points.astype(bool), radius, mode="constant", constant_values=False)
+    dilated = np.zeros_like(points, dtype=bool)
+
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if dy * dy + dx * dx > radius * radius:
+                continue
+            y_start = radius + dy
+            x_start = radius + dx
+            dilated |= padded[
+                y_start : y_start + points.shape[0],
+                x_start : x_start + points.shape[1],
+            ]
+
+    return dilated
+
+
 def display_metric(label: str, value: Any, suffix: str = "") -> None:
     """Render a metric and show N/A when the value is unavailable."""
     if value is None:
         st.metric(label, "N/A")
     elif isinstance(value, float):
-        st.metric(label, f"{value:.2f}{suffix}")
+        precision = 4 if abs(value) < 1 else 2
+        st.metric(label, f"{value:.{precision}f}{suffix}")
     else:
         st.metric(label, f"{value}{suffix}")
 
@@ -630,7 +700,8 @@ def format_card_value(value: Any, suffix: str = "") -> str:
     if value is None:
         return "N/A"
     if isinstance(value, float):
-        return f"{value:.2f}{suffix}"
+        precision = 4 if abs(value) < 1 and not suffix else 2
+        return f"{value:.{precision}f}{suffix}"
     return f"{value}{suffix}"
 
 
@@ -650,6 +721,34 @@ def density_label(vessel_density: float) -> str:
     if vessel_density > 0.18:
         return "High"
     return "Moderate"
+
+
+def morphology_support_notes(analysis: Dict[str, Any]) -> str:
+    """Return non-diagnostic clinical-support notes from morphology metrics."""
+    notes = [
+        "These morphology features are academic image-analysis indicators, not a medical diagnosis.",
+    ]
+
+    endpoint_ratio = analysis.get("endpoint_ratio")
+    fragmentation_index = analysis.get("fragmentation_index")
+    branch_density = analysis.get("branch_density")
+
+    if isinstance(endpoint_ratio, float):
+        if endpoint_ratio > 0.08:
+            notes.append("A higher endpoint ratio can indicate many terminal or broken vessel segments.")
+        else:
+            notes.append("Endpoint ratio is used to inspect terminal or fragmented vessel segments.")
+
+    if isinstance(fragmentation_index, float):
+        if fragmentation_index > 0.015:
+            notes.append("A higher fragmentation index can indicate separated vessel components.")
+        else:
+            notes.append("Fragmentation index summarizes mask connectivity after segmentation.")
+
+    if isinstance(branch_density, float):
+        notes.append("Branch density summarizes branching complexity relative to skeleton length.")
+
+    return " ".join(notes)
 
 
 def risk_status(risk_score: Optional[int]) -> Tuple[str, str]:
@@ -728,6 +827,10 @@ def build_technical_summary_report(data: Dict[str, Any]) -> str:
             f"Junction Count: {format_card_value(analysis.get('junction_count'))}",
             f"Endpoint Count: {format_card_value(analysis.get('endpoint_count'))}",
             f"Connected Components: {format_card_value(analysis.get('connected_components'))}",
+            f"Skeleton Length: {format_card_value(analysis.get('skeleton_length'))}",
+            f"Branch Density: {format_card_value(analysis.get('branch_density'))}",
+            f"Endpoint Ratio: {format_card_value(analysis.get('endpoint_ratio'))}",
+            f"Fragmentation Index: {format_card_value(analysis.get('fragmentation_index'))}",
             f"Risk Score: {format_card_value(analysis.get('risk_score'))}",
             f"Risk Category: {risk_label}",
             "",
@@ -736,6 +839,15 @@ def build_technical_summary_report(data: Dict[str, Any]) -> str:
                 "Vessel density measures the proportion of pixels classified as "
                 "retinal vessels in the predicted binary mask."
             ),
+            (
+                "Endpoint and connected-component values can help inspect whether "
+                "the predicted vessel structure is fragmented."
+            ),
+            (
+                "Junction values summarize branching complexity in the skeletonized "
+                "vessel tree."
+            ),
+            morphology_support_notes(analysis),
             density_interpretation(float(analysis["vessel_density"])),
             risk_description,
             "",
@@ -819,8 +931,12 @@ def render_technical_dashboard(data: Optional[Dict[str, Any]]) -> None:
         "centerlines, making it easier to analyze branching structure and "
         "topological connectivity."
     )
+    st.caption(
+        "Color legend: dark blue = predicted vessel mask, white = skeleton centerline, "
+        "green = endpoints, orange-red = junction or branch points."
+    )
 
-    visual_cols = st.columns(2)
+    visual_cols = st.columns(3)
     with visual_cols[0]:
         st.image(data["mask_image"], caption="Prediction Mask", width="stretch")
     with visual_cols[1]:
@@ -828,6 +944,15 @@ def render_technical_dashboard(data: Optional[Dict[str, Any]]) -> None:
             st.image(data["skeleton_image"], caption="Skeleton Map", width="stretch")
         else:
             st.info("Skeleton map unavailable.")
+    with visual_cols[2]:
+        if data.get("morphology_image") is not None:
+            st.image(
+                data["morphology_image"],
+                caption="Colored Morphology Map",
+                width="stretch",
+            )
+        else:
+            st.info("Colored morphology map unavailable.")
 
     morph_cols = st.columns(5)
     with morph_cols[0]:
@@ -840,6 +965,16 @@ def render_technical_dashboard(data: Optional[Dict[str, Any]]) -> None:
         display_metric("Endpoint Count", analysis.get("endpoint_count"))
     with morph_cols[4]:
         display_metric("Connected Components", analysis.get("connected_components"))
+
+    derived_cols = st.columns(4)
+    with derived_cols[0]:
+        display_metric("Skeleton Length", analysis.get("skeleton_length"))
+    with derived_cols[1]:
+        display_metric("Branch Density", analysis.get("branch_density"))
+    with derived_cols[2]:
+        display_metric("Endpoint Ratio", analysis.get("endpoint_ratio"))
+    with derived_cols[3]:
+        display_metric("Fragmentation Index", analysis.get("fragmentation_index"))
 
     metric_rows = [
         {
@@ -873,6 +1008,30 @@ def render_technical_dashboard(data: Optional[Dict[str, Any]]) -> None:
             "Interpretation": "Higher values suggest a less connected predicted vessel mask.",
         },
         {
+            "Metric": "Skeleton Length",
+            "Value": format_card_value(analysis.get("skeleton_length")),
+            "Meaning": "Number of one-pixel-wide skeleton pixels.",
+            "Interpretation": "Approximates total visible vessel centerline length.",
+        },
+        {
+            "Metric": "Branch Density",
+            "Value": format_card_value(analysis.get("branch_density")),
+            "Meaning": "Junction count normalized by skeleton length.",
+            "Interpretation": "Summarizes branching complexity relative to vessel length.",
+        },
+        {
+            "Metric": "Endpoint Ratio",
+            "Value": format_card_value(analysis.get("endpoint_ratio")),
+            "Meaning": "Endpoint count normalized by skeleton length.",
+            "Interpretation": "Higher values can indicate many terminal or broken segments.",
+        },
+        {
+            "Metric": "Fragmentation Index",
+            "Value": format_card_value(analysis.get("fragmentation_index")),
+            "Meaning": "Connected components normalized by skeleton length.",
+            "Interpretation": "Higher values suggest a more fragmented prediction mask.",
+        },
+        {
             "Metric": "Risk Score",
             "Value": format_card_value(analysis.get("risk_score")),
             "Meaning": "Rule-based score computed from vessel density and morphology features.",
@@ -900,6 +1059,15 @@ def render_technical_dashboard(data: Optional[Dict[str, Any]]) -> None:
         )
         st.write(f"Risk Category: {risk_label}")
         st.caption(risk_description)
+
+    st.divider()
+    st.subheader("Clinical-support Interpretation")
+    st.info(morphology_support_notes(analysis))
+    st.caption(
+        "The values depend on model quality, threshold selection, preprocessing, "
+        "and the uploaded image. They should be treated as research-support "
+        "features rather than diagnostic conclusions."
+    )
 
     st.divider()
     st.subheader("Processing Explanation")
@@ -1008,6 +1176,12 @@ def main() -> None:
                     overlay_image = Image.fromarray(overlay, mode="RGB")
                     skeleton = analysis.get("skeleton")
                     skeleton_image = mask_to_image(skeleton) if skeleton is not None else None
+                    morphology_image = make_colored_morphology_map(
+                        binary_mask,
+                        skeleton,
+                        analysis.get("endpoint_map"),
+                        analysis.get("junction_map"),
+                    )
 
                     st.session_state["technical_vessel_dashboard"] = {
                         "model_name": model_name,
@@ -1020,6 +1194,7 @@ def main() -> None:
                         "debug_stats": debug_stats,
                         "mask_image": mask_image,
                         "skeleton_image": skeleton_image,
+                        "morphology_image": morphology_image,
                     }
 
                     st.subheader("Segmentation Results")
@@ -1027,14 +1202,18 @@ def main() -> None:
                     with result_columns[0]:
                         st.image(original_image, caption="Original Image", width="stretch")
                     with result_columns[1]:
-                        st.image(mask_image, caption="Prediction Mask", width="stretch")
-                    with result_columns[2]:
                         st.image(overlay_image, caption="Overlay", width="stretch")
+                    with result_columns[2]:
+                        st.image(mask_image, caption="Prediction Mask", width="stretch")
                     with result_columns[3]:
-                        if skeleton_image is not None:
-                            st.image(skeleton_image, caption="Skeleton Map", width="stretch")
+                        if morphology_image is not None:
+                            st.image(
+                                morphology_image,
+                                caption="Colored Morphology Map",
+                                width="stretch",
+                            )
                         else:
-                            st.info("Skeleton map unavailable.")
+                            st.info("Colored morphology map unavailable.")
 
                     st.divider()
                     st.subheader("Vessel Analysis Metrics")
@@ -1081,11 +1260,42 @@ def main() -> None:
                             risk_label,
                         )
 
+                    metric_row_three = st.columns(4)
+                    with metric_row_three[0]:
+                        render_metric_card(
+                            "Skeleton Length",
+                            format_card_value(analysis.get("skeleton_length")),
+                            "Centerline pixels",
+                        )
+                    with metric_row_three[1]:
+                        render_metric_card(
+                            "Branch Density",
+                            format_card_value(analysis.get("branch_density")),
+                            "Junctions per skeleton pixel",
+                        )
+                    with metric_row_three[2]:
+                        render_metric_card(
+                            "Endpoint Ratio",
+                            format_card_value(analysis.get("endpoint_ratio")),
+                            "Endpoints per skeleton pixel",
+                        )
+                    with metric_row_three[3]:
+                        render_metric_card(
+                            "Fragmentation Index",
+                            format_card_value(analysis.get("fragmentation_index")),
+                            "Components per skeleton pixel",
+                        )
+
                     st.caption(
                         f"{density_interpretation(vessel_density)} | "
                         f"{analysis['vessel_pixels']:,} vessel pixels / "
                         f"{analysis['total_pixels']:,} total pixels | "
                         f"Status: {risk_label} ({risk_description})"
+                    )
+                    st.info(morphology_support_notes(analysis))
+                    st.caption(
+                        "Morphology color legend: dark blue = predicted vessel mask, "
+                        "white = skeleton centerline, green = endpoints, orange-red = junction points."
                     )
 
                     st.divider()
@@ -1136,7 +1346,7 @@ def main() -> None:
 
                     st.divider()
                     st.subheader("Export Results")
-                    download_mask_col, download_overlay_col = st.columns(2)
+                    download_mask_col, download_overlay_col, download_morph_col = st.columns(3)
                     with download_mask_col:
                         st.download_button(
                             "Download Prediction Mask",
@@ -1153,6 +1363,17 @@ def main() -> None:
                             mime="image/png",
                             width="stretch",
                         )
+                    with download_morph_col:
+                        if morphology_image is not None:
+                            st.download_button(
+                                "Download Morphology Map",
+                                data=image_bytes(morphology_image),
+                                file_name="colored_morphology_map.png",
+                                mime="image/png",
+                                width="stretch",
+                            )
+                        else:
+                            st.info("Morphology map unavailable.")
 
     with technical_tab:
         render_technical_dashboard(st.session_state.get("technical_vessel_dashboard"))
