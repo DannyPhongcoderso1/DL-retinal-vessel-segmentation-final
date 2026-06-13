@@ -1,77 +1,79 @@
-# Retinal Vessel Segmentation with DeepLabV3+-ResNet50 and SegFormer-B0
+# Cross-Domain Retinal Vessel Intelligence Platform
 
-Đồ án cuối kỳ môn Nhập môn Học sâu về bài toán phân đoạn mạch máu võng mạc trên ảnh đáy mắt. Dự án triển khai và so sánh hai hướng mô hình hiện đại cho semantic segmentation:
+Deep Learning-based Retinal Vessel Segmentation and Vascular Analysis using DeepLabV3+-ResNet50, SegFormer-B0, and Transfer Learning.
 
-- **CNN-based model:** DeepLabV3+-ResNet50, sử dụng backbone ResNet50 pretrained ImageNet.
-- **Attention/Transformer-based model:** SegFormer-B0, sử dụng Transformer encoder với cơ chế self-attention.
-- **Training strategy:** Transfer learning liên miền từ **CHASEDB1** sang **DRIVE**.
-- **Demo application:** Streamlit app cho phép tải ảnh võng mạc, dự đoán mask, hiển thị overlay và phân tích hình thái mạch máu.
+The project implements and compares two modern semantic segmentation approaches:
+
+- **CNN-based model:** DeepLabV3+-ResNet50, using a ResNet50 backbone pretrained on ImageNet.
+- **Attention/Transformer-based model:** SegFormer-B0, using a Transformer encoder with self-attention.
+- **Training strategy:** Cross-domain transfer learning from **CHASEDB1** to **DRIVE**.
+- **Demo application:** A Streamlit app that lets users upload retinal images, predict masks, display overlays, and analyze vessel morphology.
 
 ![Project pipeline](docs/images/project_pipeline.png)
 
-## Tóm Tắt Đề Tài
+## Project Summary
 
-Phân đoạn mạch máu võng mạc là một bước quan trọng trong các hệ thống hỗ trợ phân tích ảnh y khoa, đặc biệt trong các bài toán liên quan đến bệnh võng mạc tiểu đường, tăng huyết áp võng mạc và các bất thường mạch máu. Đầu vào của hệ thống là ảnh fundus RGB, đầu ra là mask nhị phân biểu diễn vùng mạch máu.
+Retinal vessel segmentation is an important step in computer-aided medical image analysis systems, especially for problems related to diabetic retinopathy, hypertensive retinopathy, and vascular abnormalities. The system input is an RGB fundus image, and the output is a binary mask representing the vessel region.
 
-Mục tiêu của dự án là xây dựng một pipeline đầy đủ từ tiền xử lý dữ liệu, tăng cường dữ liệu, huấn luyện transfer learning, đánh giá mô hình đến demo ứng dụng. Hai mô hình được chọn để đáp ứng yêu cầu đồ án gồm một kiến trúc CNN và một kiến trúc có cơ chế Attention.
+The goal of this project is to build an end-to-end pipeline covering data preprocessing, data augmentation, transfer learning, model evaluation, and a demo application. The two selected models satisfy the project requirements by including one CNN architecture and one architecture with an attention mechanism.
 
-## Đáp Ứng Yêu Cầu Đồ Án
+## Meeting The Project Requirements
 
-| Yêu cầu | Triển khai trong repo |
+| Requirement | Implementation in the repo |
 | --- | --- |
-| Bài toán thuộc nhóm Image Segmentation | Phân đoạn mạch máu võng mạc từ ảnh fundus |
-| Kiến trúc CNN | DeepLabV3+-ResNet50 trong `src/models/deeplabv3plus_resnet50.py` |
-| Kiến trúc Attention/Transformer | SegFormer-B0 trong `src/models/segformer.py` |
-| Bộ dữ liệu phù hợp | DRIVE và CHASEDB1 |
-| Tiền xử lý, data augmentation | Resize, chuẩn hóa ImageNet, binary mask, flip, rotate, brightness/contrast |
-| Huấn luyện 2 mô hình | Notebook `03` cho DeepLabV3+-ResNet50, notebook `04` cho SegFormer-B0 |
-| Phương pháp huấn luyện | Transfer learning CHASEDB1 source training -> DRIVE fine-tuning |
-| Chỉ số đánh giá | Dice/F1, IoU, Accuracy, Precision, Recall, validation/test loss |
-| Ứng dụng đơn giản | Streamlit app trong `app/streamlit_app.py` |
+| The problem belongs to Image Segmentation | Retinal vessel segmentation from fundus images |
+| CNN architecture | DeepLabV3+-ResNet50 in `src/models/deeplabv3plus_resnet50.py` |
+| Attention/Transformer architecture | SegFormer-B0 in `src/models/segformer.py` |
+| Suitable datasets | DRIVE and CHASEDB1 |
+| Preprocessing, data augmentation | Resize, ImageNet normalization, binary masks, flips, rotations, brightness/contrast |
+| Training two models | Notebook `03` for DeepLabV3+-ResNet50, notebook `04` for SegFormer-B0 |
+| Training method | Transfer learning with CHASEDB1 source training -> DRIVE fine-tuning |
+| Evaluation metrics | Dice/F1, IoU, Accuracy, Precision, Recall, validation/test loss |
+| Simple application | Streamlit app in `app/streamlit_app.py` |
 
-## Dữ Liệu
+## Data
 
-Dự án sử dụng hai bộ dữ liệu chuẩn cho retinal vessel segmentation:
+The project uses two benchmark datasets for retinal vessel segmentation:
 
-| Dataset | Vai trò | Đặc điểm |
+| Dataset | Role | Characteristics |
 | --- | --- | --- |
-| **CHASEDB1** | Source domain | Ảnh võng mạc RGB, mỗi ảnh có nhãn thủ công bởi chuyên gia, dùng để học đặc trưng mạch máu tổng quát |
-| **DRIVE** | Target domain | Ảnh võng mạc cho bài toán vessel extraction, dùng để fine-tune và đánh giá cuối |
+| **CHASEDB1** | Source domain | RGB retinal images, each image manually annotated by experts, used to learn general vessel features |
+| **DRIVE** | Target domain | Retinal images for the vessel extraction task, used for fine-tuning and final evaluation |
 
-Trong các notebook thực nghiệm chính, ảnh và mask được chuẩn hóa về kích thước 512 x 512 cho huấn luyện và đánh giá. Mask được chuyển về dạng nhị phân một kênh với shape `[B, 1, H, W]`.
+In the main experiment notebooks, images and masks are resized to 512 x 512 for training and evaluation. Masks are converted into single-channel binary masks with shape `[B, 1, H, W]`.
 
 ![Dataset examples](docs/images/dataset_examples.png)
 
-## Tiền Xử Lý Và Augmentation
+## Preprocessing And Augmentation
 
-Pipeline tiền xử lý gồm các bước chính:
+The preprocessing pipeline consists of the following main steps:
 
-1. Đọc ảnh fundus ở dạng RGB và đọc mask ở dạng grayscale.
-2. Resize ảnh và mask về cùng kích thước.
-3. Chuẩn hóa ảnh theo ImageNet mean/std để phù hợp với pretrained backbone/encoder.
-4. Chuyển mask về binary 0/1 và thêm channel dimension.
-5. Tăng cường dữ liệu trên tập train bằng horizontal flip, vertical flip, rotate và brightness/contrast.
+1. Read fundus images in RGB format and masks in grayscale.
+2. Resize images and masks to the same spatial resolution.
+3. Normalize images using the ImageNet mean and standard deviation to match the pretrained backbone/encoder.
+4. Convert masks to binary 0/1 values and add a channel dimension.
+5. Apply data augmentation on the training set using horizontal flip, vertical flip, rotation, and brightness/contrast adjustments.
 
 ![Preprocessing and augmentation](docs/images/preprocessing_augmentation_examples.png)
 
-## Kiến Trúc Mô Hình
+## Model Architecture
 
 ### DeepLabV3+-ResNet50
 
-DeepLabV3+-ResNet50 được dùng làm mô hình đại diện cho nhóm CNN. Mô hình sử dụng `segmentation_models_pytorch.DeepLabV3Plus` với:
+DeepLabV3+-ResNet50 is used as the representative CNN model. The model is built with `segmentation_models_pytorch.DeepLabV3Plus` using:
 
 - `encoder_name="resnet50"`.
-- `encoder_weights="imagenet"` khi huấn luyện transfer learning.
-- `classes=1` để sinh một kênh logits cho binary segmentation.
-- `activation=None` để trả về logits thô, phù hợp với `BCEWithLogitsLoss` và các loss kết hợp.
+- `encoder_weights="imagenet"` during transfer learning.
+- `classes=1` to produce a single-channel logit map for binary segmentation.
+- `activation=None` to return raw logits, which is suitable for `BCEWithLogitsLoss` and composite losses.
 
-Code chính nằm tại:
+The main code is located at:
 
 ```text
 src/models/deeplabv3plus_resnet50.py
 ```
 
-Mô hình kiểm tra input và output shape trong `forward`:
+The model validates the input and output shapes in `forward`:
 
 ```text
 Input : [B, 3, H, W]
@@ -80,47 +82,47 @@ Output: [B, 1, H, W]
 
 ### SegFormer-B0
 
-SegFormer-B0 là mô hình attention-based của dự án. Mô hình dùng `SegformerForSemanticSegmentation` từ Hugging Face Transformers. Cơ chế attention nằm trong MiT Transformer encoder của SegFormer, cho phép mô hình học quan hệ ngữ cảnh toàn cục giữa các vùng ảnh.
+SegFormer-B0 is the attention-based model in this project. It uses `SegformerForSemanticSegmentation` from Hugging Face Transformers. The attention mechanism is implemented in the MiT Transformer encoder of SegFormer, enabling the model to learn global contextual relationships across image regions.
 
-Code chính nằm tại:
+The main code is located at:
 
 ```text
 src/models/segformer.py
 ```
 
-Các điểm triển khai quan trọng:
+Key implementation details:
 
-- Pretrained checkpoint mặc định: `nvidia/segformer-b0-finetuned-ade-512-512`.
-- Chỉnh `num_labels=1` cho bài toán binary segmentation.
-- Dùng `ignore_mismatched_sizes=True` khi thay segmentation head đa lớp bằng head một kênh.
-- Nội suy logits về đúng kích thước ảnh đầu vào bằng `F.interpolate`.
-- Kiểm tra đầu ra cuối cùng phải là `[B, 1, H, W]`.
+- Default pretrained checkpoint: `nvidia/segformer-b0-finetuned-ade-512-512`.
+- Set `num_labels=1` for binary segmentation.
+- Use `ignore_mismatched_sizes=True` when replacing a multi-class segmentation head with a single-channel head.
+- Interpolate logits back to the original input resolution with `F.interpolate`.
+- Ensure the final output shape is `[B, 1, H, W]`.
 
-## Transfer Learning CHASEDB1 -> DRIVE
+## CHASEDB1 -> DRIVE Transfer Learning
 
-Hai mô hình được huấn luyện theo cùng chiến lược tổng quát:
+Both models are trained using the same high-level strategy:
 
-1. **Source training trên CHASEDB1:** học đặc trưng hình thái mạch máu từ miền dữ liệu nguồn.
-2. **Fine-tuning trên DRIVE:** tải checkpoint tốt nhất từ CHASEDB1 và tiếp tục tinh chỉnh trên DRIVE với learning rate nhỏ hơn.
-3. **Validation monitoring:** theo dõi validation Dice/IoU/loss sau mỗi epoch.
-4. **Early stopping:** dừng sớm nếu validation metric không cải thiện sau số epoch kiên nhẫn.
-5. **Best checkpoint:** lưu checkpoint tốt nhất theo validation Dice hoặc validation IoU tùy notebook.
-6. **Final evaluation:** đánh giá trên DRIVE test set và lưu kết quả, history, prediction figures.
+1. **Source training on CHASEDB1:** learn vessel morphology features from the source domain.
+2. **Fine-tuning on DRIVE:** load the best CHASEDB1 checkpoint and continue fine-tuning on DRIVE with a smaller learning rate.
+3. **Validation monitoring:** track validation Dice/IoU/loss after each epoch.
+4. **Early stopping:** stop early if the validation metric does not improve after the patience window.
+5. **Best checkpoint:** save the best checkpoint according to validation Dice or validation IoU, depending on the notebook.
+6. **Final evaluation:** evaluate on the DRIVE test set and save results, history, and prediction figures.
 
-Các notebook chính:
+Main notebooks:
 
-| Notebook | Vai trò |
+| Notebook | Role |
 | --- | --- |
-| `notebooks/00_EDA_Data.ipynb` | Khám phá dữ liệu, kiểm tra ảnh và mask |
-| `notebooks/01_Pretraining.ipynb` | Tiền xử lý, export dữ liệu, kiểm tra DataLoader shape |
-| `notebooks/02_SegFormer_B0_DRIVE.ipynb` | Thử nghiệm SegFormer-B0 trực tiếp trên DRIVE |
-| `notebooks/03_DeepLabV3Plus_ResNet50_CHASE_to_DRIVE.ipynb` | Transfer learning DeepLabV3+-ResNet50 từ CHASEDB1 sang DRIVE |
-| `notebooks/04_SegFormer_B0_CHASE_to_DRIVE.ipynb` | Transfer learning SegFormer-B0 từ CHASEDB1 sang DRIVE |
-| `notebooks/environment_setup.ipynb` | Kiểm tra môi trường chạy trên Kaggle |
+| `notebooks/00_EDA_Data.ipynb` | Data exploration, image and mask inspection |
+| `notebooks/01_Pretraining.ipynb` | Preprocessing, data export, DataLoader shape checks |
+| `notebooks/02_SegFormer_B0_DRIVE.ipynb` | SegFormer-B0 experiments directly on DRIVE |
+| `notebooks/03_DeepLabV3Plus_ResNet50_CHASE_to_DRIVE.ipynb` | Transfer learning DeepLabV3+-ResNet50 from CHASEDB1 to DRIVE |
+| `notebooks/04_SegFormer_B0_CHASE_to_DRIVE.ipynb` | Transfer learning SegFormer-B0 from CHASEDB1 to DRIVE |
+| `notebooks/environment_setup.ipynb` | Runtime environment checks on Kaggle |
 
-## Cấu Hình Huấn Luyện
+## Training Configuration
 
-| Thành phần | DeepLabV3+-ResNet50 | SegFormer-B0 |
+| Component | DeepLabV3+-ResNet50 | SegFormer-B0 |
 | --- | --- | --- |
 | Input size | 512 x 512 | 512 x 512 |
 | Optimizer | AdamW | AdamW |
@@ -130,7 +132,7 @@ Các notebook chính:
 | Source learning rate | Backbone 1e-5, Head 1e-4 | Encoder 1e-5, Head 1e-4 |
 | Target learning rate | Backbone 5e-6, Head 5e-5 | Encoder 5e-6, Head 5e-5 |
 | Loss | BCEWithLogits + Tversky | BCEWithLogits |
-| Early stopping | Có | Có |
+| Early stopping | Yes | Yes |
 | Main validation metric | Dice/IoU | Dice/IoU |
 
 ## Training Curves
@@ -143,9 +145,9 @@ SegFormer-B0:
 
 ![SegFormer training curves](docs/images/segformer_training_curves.png)
 
-## Kết Quả Định Lượng
+## Quantitative Results
 
-Bảng dưới đây là kết quả tổng hợp cuối trên DRIVE test set sau transfer learning. Logits được đưa qua sigmoid và nhị phân hóa bằng threshold tương ứng với từng mô hình.
+The table below summarizes the final results on the DRIVE test set after transfer learning. Logits are passed through sigmoid and binarized using the threshold specific to each model.
 
 | Model | Threshold | Dice/F1 | IoU | Accuracy | Precision | Recall |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -154,13 +156,13 @@ Bảng dưới đây là kết quả tổng hợp cuối trên DRIVE test set sa
 
 ![Metric comparison](docs/images/metric_comparison.png)
 
-### Nhận Xét
+### Analysis
 
-DeepLabV3+-ResNet50 đạt Dice và IoU nhỉnh hơn nhẹ, đồng thời có Recall cao hơn. Điều này cho thấy mô hình có xu hướng phát hiện được nhiều vùng mạch máu hơn, đặc biệt là các nhánh nhỏ, nhưng có thể tạo thêm false positive.
+DeepLabV3+-ResNet50 achieves slightly higher Dice and IoU, and also a higher Recall. This indicates that the model tends to detect more vessel regions, especially small branches, but may also produce more false positives.
 
-SegFormer-B0 có Accuracy và Precision cao hơn. Prediction mask thường sạch hơn và ít nhiễu nền hơn, nhưng một số nhánh mạch nhỏ có thể bị bỏ sót do Recall thấp hơn.
+SegFormer-B0 has higher Accuracy and Precision. Its predicted masks are usually cleaner and contain less background noise, but some small vessel branches may be missed because Recall is lower.
 
-## Kết Quả Trực Quan
+## Visual Results
 
 DeepLabV3+-ResNet50 prediction example:
 
@@ -170,31 +172,31 @@ SegFormer-B0 prediction example:
 
 ![SegFormer prediction example](docs/images/segformer_prediction_example.png)
 
-Các hình trên được trích từ output notebook chạy thực nghiệm trên Kaggle. Mỗi hình gồm ảnh gốc, ground truth và prediction mask.
+The figures above are extracted from notebook outputs generated during experiments on Kaggle. Each figure contains the original image, ground truth, and prediction mask.
 
 ## Streamlit Demo App
 
-Ứng dụng demo nằm trong:
+The demo application is located at:
 
 ```text
 app/streamlit_app.py
 ```
 
-Chức năng chính:
+Main features:
 
-- Tải ảnh võng mạc định dạng PNG/JPG/JPEG.
-- Chọn mô hình SegFormer-B0 hoặc DeepLabV3+-ResNet50.
-- Chỉnh prediction threshold.
-- Sinh probability map và binary vessel mask.
-- Hiển thị overlay giữa ảnh gốc và mask.
-- Skeletonization và phân tích morphology.
-- Xuất prediction mask, overlay image và technical summary.
+- Upload retinal images in PNG/JPG/JPEG format.
+- Select either SegFormer-B0 or DeepLabV3+-ResNet50.
+- Adjust the prediction threshold.
+- Generate a probability map and binary vessel mask.
+- Display an overlay between the original image and the mask.
+- Perform skeletonization and morphology analysis.
+- Export the prediction mask, overlay image, and technical summary.
 
 ![App workflow](docs/images/app_workflow.png)
 
-Lưu ý: app phục vụ mục đích học tập và nghiên cứu, không phải công cụ chẩn đoán y khoa.
+Note: the app is intended for learning and research purposes, not as a medical diagnosis tool.
 
-## Cấu Trúc Repo
+## Repository Structure
 
 ```text
 .
@@ -240,13 +242,13 @@ Lưu ý: app phục vụ mục đích học tập và nghiên cứu, không ph�
 `-- requirements.txt
 ```
 
-Một số artifact được tạo sau khi chạy notebook hoặc script:
+Some artifacts are created after running notebooks or scripts:
 
-- `dataset/drive_test_dataset.pt`: file test tensor cho evaluation local.
-- `src/models/best_deeplabv3plus_resnet50.pth`: checkpoint DeepLabV3+-ResNet50 sau khi tải từ output Kaggle.
-- `outputs/predictions/`: ảnh dự đoán được sinh bởi script visualize.
+- `dataset/drive_test_dataset.pt`: local evaluation test tensor file.
+- `src/models/best_deeplabv3plus_resnet50.pth`: DeepLabV3+-ResNet50 checkpoint after downloading from Kaggle outputs.
+- `outputs/predictions/`: prediction images generated by the visualization script.
 
-## Cài Đặt Môi Trường Local
+## Local Environment Setup
 
 ```powershell
 python -m venv .venv
@@ -255,21 +257,21 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Nếu chạy trên Kaggle, cài các thư viện trong `requirements.txt` hoặc chạy notebook `notebooks/environment_setup.ipynb` trước.
+If you are running on Kaggle, install the libraries in `requirements.txt` or run `notebooks/environment_setup.ipynb` first.
 
-## Chạy Notebook Trên Kaggle
+## Running Notebooks On Kaggle
 
-Quy trình khuyến nghị:
+Recommended workflow:
 
-1. Upload hoặc mount `DRIVE_processed_dataset.zip` và `CHASEDB1_processed_dataset.zip`.
-2. Chạy `notebooks/environment_setup.ipynb` để kiểm tra thư viện.
-3. Chạy `notebooks/00_EDA_Data.ipynb` để kiểm tra dữ liệu.
-4. Chạy `notebooks/01_Pretraining.ipynb` để kiểm tra preprocessing và DataLoader.
-5. Chạy `notebooks/03_DeepLabV3Plus_ResNet50_CHASE_to_DRIVE.ipynb` để huấn luyện DeepLabV3+-ResNet50.
-6. Chạy `notebooks/04_SegFormer_B0_CHASE_to_DRIVE.ipynb` để huấn luyện SegFormer-B0.
-7. Tải các checkpoint và file kết quả từ `/kaggle/working`.
+1. Upload or mount `DRIVE_processed_dataset.zip` and `CHASEDB1_processed_dataset.zip`.
+2. Run `notebooks/environment_setup.ipynb` to verify the libraries.
+3. Run `notebooks/00_EDA_Data.ipynb` to inspect the data.
+4. Run `notebooks/01_Pretraining.ipynb` to validate preprocessing and the DataLoader.
+5. Run `notebooks/03_DeepLabV3Plus_ResNet50_CHASE_to_DRIVE.ipynb` to train DeepLabV3+-ResNet50.
+6. Run `notebooks/04_SegFormer_B0_CHASE_to_DRIVE.ipynb` to train SegFormer-B0.
+7. Download the checkpoints and result files from `/kaggle/working`.
 
-Artifact quan trọng từ Kaggle:
+Important Kaggle artifacts:
 
 ```text
 /kaggle/working/best_segformer_b0.pth
@@ -278,16 +280,16 @@ Artifact quan trọng từ Kaggle:
 /kaggle/working/deeplabv3plus_resnet50_outputs/results/deeplabv3plus_resnet50_drive_test_results.csv
 ```
 
-Khi đưa về repo local, nên đặt checkpoint theo tên:
+When bringing the files back to the local repo, rename the checkpoints as follows:
 
 ```text
 src/models/best_segformer_b0.pth
 src/models/best_deeplabv3plus_resnet50.pth
 ```
 
-## Chuẩn Bị Test Dataset Local
+## Preparing The Local Test Dataset
 
-File `.pt` dùng cho `src/evaluate.py` có thể được export từ zip DRIVE đã xử lý:
+The `.pt` file used by `src/evaluate.py` can be exported from the processed DRIVE zip file:
 
 ```powershell
 python src\export_test_dataset.py `
@@ -296,7 +298,7 @@ python src\export_test_dataset.py `
   --image-size 512
 ```
 
-Kiểm tra ảnh test đã export:
+Check the exported test images:
 
 ```powershell
 python src\export_test_images.py `
@@ -304,7 +306,7 @@ python src\export_test_images.py `
   --output outputs\app_test_images_full
 ```
 
-## Đánh Giá Mô Hình Local
+## Evaluating Local Models
 
 SegFormer-B0:
 
@@ -328,7 +330,7 @@ python src\evaluate.py `
   --threshold 0.85
 ```
 
-Đánh giá cả hai mô hình nếu đã có đủ checkpoint:
+Evaluate both models if both checkpoints are available:
 
 ```powershell
 python src\evaluate.py `
@@ -337,7 +339,7 @@ python src\evaluate.py `
   --batch-size 2
 ```
 
-Tìm threshold tốt nhất theo Dice:
+Find the best threshold by Dice:
 
 ```powershell
 python src\evaluate.py `
@@ -351,7 +353,7 @@ python src\evaluate.py `
   --threshold-step 0.05
 ```
 
-## Sinh Ảnh Prediction Local
+## Generating Local Prediction Images
 
 ```powershell
 python src\visualize_predictions.py `
@@ -363,17 +365,17 @@ python src\visualize_predictions.py `
   --output-dir outputs\predictions
 ```
 
-## Chạy Ứng Dụng
+## Running The Application
 
 ```powershell
 streamlit run app\streamlit_app.py
 ```
 
-Ứng dụng mặc định đọc checkpoint trong `src/models/`. Repo hiện có checkpoint SegFormer-B0. Nếu muốn chạy DeepLabV3+-ResNet50 trong app, cần tải checkpoint DeepLab từ output Kaggle và đặt đúng tên `src/models/best_deeplabv3plus_resnet50.pth`.
+By default, the application reads checkpoints from `src/models/`. The repo currently includes the SegFormer-B0 checkpoint. If you want to run DeepLabV3+-ResNet50 in the app, download the DeepLab checkpoint from the Kaggle output and place it under the exact name `src/models/best_deeplabv3plus_resnet50.pth`.
 
-## Vị Trí Code Quan Trọng
+## Key Code Locations
 
-| Thành phần | File |
+| Component | File |
 | --- | --- |
 | SegFormer-B0 attention model | `src/models/segformer.py` |
 | DeepLabV3+-ResNet50 CNN model | `src/models/deeplabv3plus_resnet50.py` |
@@ -384,19 +386,19 @@ streamlit run app\streamlit_app.py
 | DRIVE test export | `src/export_test_dataset.py` |
 | Streamlit app | `app/streamlit_app.py` |
 
-## Hạn Chế Và Hướng Phát Triển
+## Limitations And Future Work
 
-Hạn chế chính của dự án là kích thước dữ liệu còn nhỏ, domain shift giữa CHASEDB1 và DRIVE vẫn ảnh hưởng đến các nhánh mạch nhỏ, và risk score trong app mới là chỉ số minh họa rule-based, chưa có giá trị lâm sàng.
+The main limitations of the project are the relatively small dataset size, the domain shift between CHASEDB1 and DRIVE that still affects small vessel branches, and the risk score in the app, which is currently only a rule-based illustrative indicator and not clinically validated.
 
-Các hướng phát triển tiếp theo:
+Future work includes:
 
-- Mở rộng dữ liệu với các bộ retinal vessel segmentation khác.
-- Thử nghiệm post-processing để nối các nhánh mạch bị đứt đoạn.
-- Tune threshold riêng theo từng mô hình và từng tập validation.
-- Bổ sung calibration và uncertainty estimation.
-- Cải thiện app thành dashboard so sánh nhiều mô hình trên cùng ảnh.
+- Expand the dataset with additional retinal vessel segmentation benchmarks.
+- Experiment with post-processing to reconnect broken vessel branches.
+- Tune the threshold separately for each model and validation set.
+- Add calibration and uncertainty estimation.
+- Turn the app into a dashboard for comparing multiple models on the same image.
 
-## Tài Liệu Tham Khảo
+## References
 
 1. Fraz, M. M., et al. (2012). An ensemble classification-based approach applied to retinal blood vessel segmentation. *IEEE Transactions on Biomedical Engineering*.
 2. Staal, J., et al. (2004). Ridge-based vessel segmentation in color images of the retina. *IEEE Transactions on Medical Imaging*.

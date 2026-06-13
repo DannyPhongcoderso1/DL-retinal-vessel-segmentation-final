@@ -41,3 +41,4 @@ md/
 dataset/drive_test_dataset.pt
 src/models/best_deeplabv3_resnet50.pth
 src/models/*.pth
+\[Deep Learning\] REPORT.pdf
